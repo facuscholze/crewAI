@@ -1,0 +1,5 @@
+knowledge_base:
+  - path: src/integrado/knowledge/profisio_knowledge.md
+    type: markdown
+    
+    

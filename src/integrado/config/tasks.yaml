@@ -1,0 +1,112 @@
+# crewai_integrado/src/integrado/config/tasks.yaml
+
+# Tarea de coordinación principal
+coordinate_message:
+  description: >
+    Analizar el mensaje entrante del canal {channel} del usuario {user_id}.
+    Determinar el contexto de la conversación, el tipo de mensaje y el agente especializado más apropiado.
+    Mantener el contexto de la conversación en Redis.
+  expected_output: >
+    Decisión sobre qué agente debe manejar el mensaje y contexto actualizado de la conversación
+  agent: coordinator
+
+# Tareas para WhatsApp
+whatsapp_text_message:
+  description: >
+    Como recepcionista virtual, responde al mensaje "{message}" del usuario {user_id}.
+    Usa el contexto de conversación: {conversation_context}
+    
+    REGLAS CRÍTICAS DE CONTEXTO:
+    1. LEE TODO EL HISTORIAL antes de responder
+    2. Si ya hay conversación en curso, NO saludes de nuevo
+    3. Si el usuario menciona múltiples temas, responde a TODOS
+    4. Continúa la conversación naturalmente, no la reinicies
+    5. Haz referencia específica a mensajes anteriores del usuario
+    
+    PASOS OBLIGATORIOS:
+    1. Analiza el contexto completo de la conversación
+    2. Genera una respuesta que CONTINÚE la conversación, no la inicie
+    3. USA WhatsAppTool para ENVIAR la respuesta al usuario {user_id}
+    4. USA AIResponseTool para guardar la respuesta en el historial
+    
+    
+    
+    CRÍTICO: Debes ENVIAR el mensaje usando WhatsAppTool, no solo generarlo.
+  expected_output: >
+    Respuesta que continúa la conversación naturalmente, mensaje enviado a WhatsApp y guardado en historial
+  agent: whatsapp_agent
+
+whatsapp_voice_call:
+  description: >
+    Generar llamada de voz usando ElevenLabs para WhatsApp del usuario {user_id}.
+    Crear script de conversación natural y coordinar la llamada.
+  expected_output: >
+    Audio generado con ElevenLabs y confirmación de llamada realizada
+  agent: voice_agent
+
+# Tareas para Messenger
+messenger_message:
+  description: >
+    Procesar mensaje de Facebook Messenger del usuario {user_id}.
+    Crear respuesta interactiva con elementos apropiados (botones, tarjetas, etc.).
+    Mantener engagement y resolución rápida.
+  expected_output: >
+    Respuesta estructurada para Messenger con elementos interactivos
+  agent: messenger_agent
+
+# Tareas para Instagram
+instagram_message:
+  description: >
+    Procesar mensaje directo de Instagram del usuario {user_id}.
+    Crear respuesta visual y creativa apropiada para la plataforma.
+    Integrar elementos multimedia cuando sea necesario.
+  expected_output: >
+    Respuesta creativa para Instagram Direct con elementos visuales
+  agent: instagram_agent
+
+# --- INICIO DE LA MODIFICACIÓN ---
+# Tareas para Gmail
+gmail_message:
+  description: >
+    Has recibido un nuevo email del usuario {user_id}.
+    El cuerpo del email es: "{message}".
+    Tu contexto de conversación es: {conversation_context}
+
+    PASOS OBLIGATORIOS:
+    1.  Analiza el cuerpo del email ("{message}") y el contexto.
+    2.  Genera una respuesta inteligente y profesional usando tu personalidad de IA (gmail_agent).
+    3.  USA 'Gmail IMAP/SMTP Tool' para ENVIAR tu respuesta.
+    4.  AL ENVIAR, DEBES usar el ID del email original para responder en el hilo. Pasa el valor "{original_message_id}" al parámetro "reply_to_message_id" de la herramienta.
+
+    CRÍTICO: NO busques el email. YA LO TIENES. Solo genera la respuesta y envíala usando el 'reply_to_message_id' = "{original_message_id}" para seguir el hilo.
+  expected_output: >
+    Una respuesta de IA profesional enviada en el hilo de conversación correcto usando el Message-ID provisto.
+  agent: gmail_agent
+# --- FIN DE LA MODIFICACIÓN ---
+
+# Tareas para Google Calendar
+schedule_event:
+  description: >
+    Agendar evento en Google Calendar para el usuario {user_id}.
+    Verificar disponibilidad, crear evento y enviar invitaciones.
+    Manejar conflictos de horario.
+  expected_output: >
+    Evento creado en Google Calendar con confirmación y detalles
+  agent: calendar_agent
+
+update_calendar:
+  description: >
+    Actualizar evento existente en Google Calendar del usuario {user_id}.
+    Modificar horario, participantes o detalles del evento.
+  expected_output: >
+    Evento actualizado con confirmación de cambios
+  agent: calendar_agent
+
+# Tarea de seguimiento
+follow_up_task:
+  description: >
+    Crear seguimiento automático para conversaciones pendientes.
+    Verificar estado de tareas y enviar recordatorios apropiados.
+  expected_output: >
+    Seguimiento programado y recordatorios enviados
+  agent: coordinator
