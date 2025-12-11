@@ -28,7 +28,21 @@ def print_banner():
     """)
 
 def start_ngrok(port=8000):
-    print(f"🌐 Iniciando ngrok en puerto {port}...")
+    print(f"🌐 Buscando o iniciando ngrok en puerto {port}...")
+    
+    # Primero intentar conectar a un ngrok existente
+    try:
+        response = requests.get('http://localhost:4040/api/tunnels', timeout=3)
+        if response.status_code == 200:
+            tunnels = response.json()['tunnels']
+            if tunnels:
+                public_url = tunnels[0]['public_url']
+                print(f"✅ Conectado a ngrok existente: {public_url}")
+                return None, public_url
+    except:
+        pass
+        
+    # Si no hay ngrok corriendo, iniciar uno nuevo
     try:
         ngrok_process = subprocess.Popen(
             ['ngrok', 'http', str(port)],
@@ -41,7 +55,7 @@ def start_ngrok(port=8000):
             tunnels = response.json()['tunnels']
             if tunnels:
                 public_url = tunnels[0]['public_url']
-                print(f"✅ ngrok iniciado: {public_url}")
+                print(f"✅ Nuevo ngrok iniciado: {public_url}")
                 return ngrok_process, public_url
         print("⚠️ No se pudo obtener URL automáticamente.")
         return ngrok_process, None
@@ -92,6 +106,8 @@ def start_server():
         debug = os.getenv('DEBUG', 'True').lower() == 'true'
         print(f"🌐 Servidor iniciado en: http://{host}:{port}")
         print(f"📚 Documentación local:  http://{host}:{port}/docs")
+        # El poller de Instagram se inicia desde el evento 'startup' de FastAPI
+        # para evitar problemas de orden de importación/circular imports.
         uvicorn.run("integrado.main:app", host=host, port=port, reload=debug)
     except Exception as e:
         print(f"❌ Error iniciando servidor: {e}")

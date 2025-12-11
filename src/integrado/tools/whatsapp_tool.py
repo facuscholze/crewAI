@@ -69,21 +69,44 @@ class WhatsAppTool(BaseTool):
         
         try:
             response = requests.post(url, json=payload, headers=headers)
+            response_data = response.json() if response.content else {}
             
             if response.status_code == 200:
-                result = response.json()
-                message_id = result.get('messages', [{}])[0].get('id', 'unknown')
+                # Verificar si hay errores en la respuesta (aunque status sea 200)
+                if 'error' in response_data:
+                    error_code = response_data['error'].get('code', 'unknown')
+                    error_message = response_data['error'].get('message', 'unknown')
+                    error_subcode = response_data['error'].get('error_subcode', '')
+                    
+                    # Error 131030: número no en lista permitida (modo desarrollo)
+                    if error_code == 131030 or error_subcode == 131030:
+                        print(f"⚠️ WhatsApp API Error 131030: El número {clean_to} no está en la lista permitida")
+                        print(f"   Mensaje: {error_message}")
+                        return f"Error: El número {clean_to} no está en la lista de números permitidos de WhatsApp Business API (modo desarrollo). Agrega este número en Meta Business Suite."
+                    # Error 131026: rate limit
+                    elif error_code == 131026 or error_subcode == 131026:
+                        return f"WhatsApp message queued (rate limit - will be sent shortly). Message: {message}"
+                    else:
+                        return f"Failed to send message: Error {error_code} - {error_message}"
+                
+                # Si no hay errores, el mensaje se envió correctamente
+                message_id = response_data.get('messages', [{}])[0].get('id', 'unknown')
+                print(f"✅ WhatsApp message sent successfully to {clean_to}. Message ID: {message_id}")
                 return f"WhatsApp message sent successfully. Message ID: {message_id}"
             else:
                 error_detail = response.text if response.text else "No error details"
+                error_code = response_data.get('error', {}).get('code', 'unknown')
+                error_message = response_data.get('error', {}).get('message', error_detail)
                 
                 # Manejar errores específicos de WhatsApp
-                if "131030" in error_detail:
-                    return f"WhatsApp message queued (number not in allowed list - development mode). Message: {message}"
-                elif "131026" in error_detail:
+                if error_code == 131030 or "131030" in error_detail:
+                    print(f"⚠️ WhatsApp API Error 131030: El número {clean_to} no está en la lista permitida")
+                    return f"Error: El número {clean_to} no está en la lista de números permitidos de WhatsApp Business API (modo desarrollo). Agrega este número en Meta Business Suite."
+                elif error_code == 131026 or "131026" in error_detail:
                     return f"WhatsApp message queued (rate limit - will be sent shortly). Message: {message}"
                 else:
-                    return f"Failed to send message: {response.status_code} - {error_detail}"
+                    print(f"❌ WhatsApp API Error {error_code}: {error_message}")
+                    return f"Failed to send message: {response.status_code} - Error {error_code}: {error_message}"
             
         except requests.exceptions.RequestException as e:
             return f"Error sending WhatsApp message: {str(e)}"

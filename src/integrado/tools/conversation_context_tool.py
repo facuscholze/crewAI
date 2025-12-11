@@ -15,7 +15,7 @@ class ConversationContextInput(BaseModel):
     """Input schema for conversation context management."""
     user_id: str = Field(..., description="Unique identifier for the user (phone number)")
     channel: str = Field(..., description="Communication channel (whatsapp, messenger, instagram, gmail)")
-    message: str = Field(..., description="Current message content")
+    message: str = Field(default="", description="Current message content")
     message_type: str = Field(default="text", description="Type of message (text, voice, image, etc.)")
 
 class ConversationContextTool(BaseTool):
@@ -26,21 +26,22 @@ class ConversationContextTool(BaseTool):
     )
     args_schema: Type[BaseModel] = ConversationContextInput
 
-    def _run(self, user_id: str, channel: str, message: str, message_type: str = "text") -> str:
+    def _run(self, user_id: str, channel: str, message: Optional[str] = "", message_type: str = "text") -> str:
         """Manage conversation context and history for a user."""
         
         try:
-            # Agregar mensaje humano al historial
-            mongodb_conversation_db.add_message(
-                session_id=user_id,
-                message_type="human",
-                content=message,
-                additional_kwargs={
-                    "message_type": message_type,
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "channel": channel
-                }
-            )
+            # Agregar mensaje humano al historial solo si hay mensaje
+            if message:
+                mongodb_conversation_db.add_message(
+                    session_id=user_id,
+                    message_type="human",
+                    content=message,
+                    additional_kwargs={
+                        "message_type": message_type,
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "channel": channel
+                    }
+                )
             
             # Obtener contexto formateado para el agente
             context_summary = mongodb_conversation_db.get_conversation_context(user_id)
