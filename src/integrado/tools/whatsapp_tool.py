@@ -5,6 +5,8 @@ import requests
 import os
 from datetime import datetime
 
+from .runtime_context import current_user_id, current_channel
+
 
 class WhatsAppMessageInput(BaseModel):
     """Input schema for WhatsApp message tool."""
@@ -22,16 +24,32 @@ class WhatsAppTool(BaseTool):
     args_schema: Type[BaseModel] = WhatsAppMessageInput
 
     def _run(self, to: str, message: str, message_type: str = "text") -> str:
-        """Send WhatsApp message, voice message, or initiate call."""
-        
+        """Send WhatsApp message, voice message, or initiate call.
+
+        Only override the destination with context when channel is WhatsApp and the
+        context ID looks like a phone. For other channels (instagram, messenger, gmail)
+        we keep the provided `to` (e.g., clinic_number) to avoid sending to PSIDs/emails.
+        """
+
         access_token = os.getenv('WHATSAPP_ACCESS_TOKEN')
         phone_number_id = os.getenv('WHATSAPP_PHONE_NUMBER_ID')
         
         if not access_token or not phone_number_id:
             return "Error: WhatsApp credentials not configured"
+
+        channel = (current_channel() or "whatsapp").lower()
+
+        # Default to the provided destination; only override for WhatsApp with a valid phone-like context ID
+        safe_to = to
+        if channel == "whatsapp":
+            ctx_id = current_user_id()
+            if ctx_id:
+                normalized_ctx = ctx_id.strip('+').replace('-', '').replace(' ', '')
+                if normalized_ctx.isdigit() and 9 <= len(normalized_ctx) <= 15:
+                    safe_to = ctx_id
         
         # Limpiar número de teléfono (remover + y espacios, pero mantener formato internacional)
-        clean_to = to.replace('+', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+        clean_to = safe_to.replace('+', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
         
         # Corregir número argentino: remover 9 extra si está presente
         # Formato incorrecto: 5493755629953 (con 9 extra)

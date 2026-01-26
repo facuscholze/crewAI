@@ -10,6 +10,7 @@ import os
 from datetime import datetime
 
 from ..database.mongodb_conversation import mongodb_conversation_db
+from .runtime_context import current_user_id, current_channel
 
 class ConversationContextInput(BaseModel):
     """Input schema for conversation context management."""
@@ -27,27 +28,31 @@ class ConversationContextTool(BaseTool):
     args_schema: Type[BaseModel] = ConversationContextInput
 
     def _run(self, user_id: str, channel: str, message: Optional[str] = "", message_type: str = "text") -> str:
-        """Manage conversation context and history for a user."""
-        
+        """Manage conversation context and history for a user.
+
+        Enforce the trusted runtime context IDs to avoid phone/channel hallucinations.
+        """
+
         try:
-            # Agregar mensaje humano al historial solo si hay mensaje
+            safe_user_id = current_user_id() or user_id
+            safe_channel = current_channel() or channel
+
             if message:
                 mongodb_conversation_db.add_message(
-                    session_id=user_id,
+                    session_id=safe_user_id,
                     message_type="human",
                     content=message,
                     additional_kwargs={
                         "message_type": message_type,
                         "timestamp": datetime.utcnow().isoformat(),
-                        "channel": channel
-                    }
+                        "channel": safe_channel,
+                    },
                 )
-            
-            # Obtener contexto formateado para el agente
-            context_summary = mongodb_conversation_db.get_conversation_context(user_id)
-            
+
+            context_summary = mongodb_conversation_db.get_conversation_context(safe_user_id)
+
             return context_summary
-            
+
         except Exception as e:
             return f"Error managing conversation context: {str(e)}"
 
@@ -112,11 +117,13 @@ class ConversationContextUpdateTool(BaseTool):
 
     def _run(self, user_id: str, context_key: str, context_value: str, channel: str = "whatsapp") -> str:
         """Update conversation context"""
-        
+
         try:
-            conversation_db.set_context(user_id, context_key, context_value, channel)
+            safe_user_id = current_user_id() or user_id
+            safe_channel = current_channel() or channel
+            conversation_db.set_context(safe_user_id, context_key, context_value, safe_channel)
             return f"Contexto actualizado: {context_key} = {context_value}"
-            
+
         except Exception as e:
             return f"Error updating context: {str(e)}"
 
@@ -135,29 +142,30 @@ class ConversationHistoryTool(BaseTool):
 
     def _run(self, user_id: str, limit: int = 20, channel: str = "whatsapp") -> str:
         """Get conversation history"""
-        
+
         try:
-            history = conversation_db.get_conversation_history(user_id, limit)
-            
+            safe_user_id = current_user_id() or user_id
+            history = conversation_db.get_conversation_history(safe_user_id, limit)
+
             if not history:
-                return f"No hay historial de conversación para {user_id}"
-            
+                return f"No hay historial de conversación para {safe_user_id}"
+
             formatted_history = []
-            formatted_history.append(f"=== HISTORIAL COMPLETO PARA {user_id} ===")
-            
+            formatted_history.append(f"=== HISTORIAL COMPLETO PARA {safe_user_id} ===")
+
             for i, msg in enumerate(history, 1):
                 msg_type = msg["type"]
                 content = msg["data"]["content"]
-                
+
                 if msg_type == "human":
                     formatted_history.append(f"{i}. 👤 Usuario: {content}")
                 elif msg_type == "ai":
                     formatted_history.append(f"{i}. 🤖 Recepcionista: {content}")
                 else:
                     formatted_history.append(f"{i}. 🔧 Sistema: {content}")
-            
+
             return "\n".join(formatted_history)
-            
+
         except Exception as e:
             return f"Error retrieving history: {str(e)}"
 
@@ -175,13 +183,15 @@ class ConversationStatsTool(BaseTool):
 
     def _run(self, user_id: str, channel: str = "whatsapp") -> str:
         """Get conversation statistics"""
-        
+
         try:
-            stats = conversation_db.get_session_stats(user_id, channel)
-            
+            safe_user_id = current_user_id() or user_id
+            safe_channel = current_channel() or channel
+            stats = conversation_db.get_session_stats(safe_user_id, safe_channel)
+
             if not stats:
-                return f"No hay estadísticas para {user_id}"
-            
+                return f"No hay estadísticas para {safe_user_id}"
+
             formatted_stats = [
                 f"=== ESTADÍSTICAS DE CONVERSACIÓN ===",
                 f"Usuario: {stats['session_id']}",
@@ -193,8 +203,8 @@ class ConversationStatsTool(BaseTool):
                 f"Mensajes de la recepcionista: {stats['ai_messages']}",
                 f"Estado: {'Activa' if stats['is_active'] else 'Cerrada'}"
             ]
-            
+
             return "\n".join(formatted_stats)
-            
+
         except Exception as e:
             return f"Error retrieving stats: {str(e)}"

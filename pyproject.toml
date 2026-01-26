@@ -12,7 +12,8 @@ dependencies = [
     "requests",
     "pydantic",
     "google-api-python-client",
-    "pymongo"
+    "pymongo",
+    "sqlalchemy>=2.0.0"
 ]
 
 [project.scripts]

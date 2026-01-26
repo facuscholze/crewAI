@@ -206,25 +206,18 @@ def main():
 
     project_root = Path(__file__).parent
     env_file = project_root / ".env"
-    if not env_file.exists():
-        env_example = project_root.parent / "env.example"
-        if env_example.exists():
-            import shutil
-            shutil.copy2(env_example, env_file)
-            print("✅ Archivo .env creado desde env.example")
-        else:
-            print("❌ Archivo env.example no encontrado")
-            return
+    # Cargar variables desde .env si existe, pero no requerirlo
+    if env_file.exists():
+        try:
+            load_dotenv(dotenv_path=env_file)
+            print("✅ Variables cargadas desde .env")
+        except Exception as e:
+            print(f"⚠️ No se pudo cargar .env: {e}")
+    else:
+        print("ℹ️ .env no encontrado; se usarán variables del entorno y valores por defecto.")
 
-    port = 8000
-    try:
-        with open(env_file, 'r') as f:
-            for line in f:
-                if line.startswith('PORT='):
-                    port = int(line.split('=')[1].strip())
-                    break
-    except:
-        pass
+    # Determinar puerto desde variables de entorno (o default 8000)
+    port = int(os.getenv('PORT', '8000'))
 
     ngrok_process, public_url = start_ngrok(port)
     if ngrok_process:

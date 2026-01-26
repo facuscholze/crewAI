@@ -5,10 +5,12 @@ from datetime import datetime
 
 Base = declarative_base()
 
+
 class Conversation(Base):
     """Modelo para almacenar conversaciones"""
+
     __tablename__ = 'conversations'
-    
+
     id = Column(Integer, primary_key=True)
     user_id = Column(String(255), nullable=False)
     channel = Column(String(50), nullable=False)
@@ -16,12 +18,14 @@ class Conversation(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     status = Column(String(50), default='active')
-    metadata = Column(JSON)
+    message_metadata = Column(JSON)  # Cambiado de 'metadata' a 'message_metadata'
+
 
 class Message(Base):
     """Modelo para almacenar mensajes individuales"""
+
     __tablename__ = 'messages'
-    
+
     id = Column(Integer, primary_key=True)
     conversation_id = Column(Integer, nullable=False)
     user_id = Column(String(255), nullable=False)
@@ -30,12 +34,14 @@ class Message(Base):
     content = Column(Text, nullable=False)
     direction = Column(String(10), nullable=False)  # 'inbound' or 'outbound'
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
-    metadata = Column(JSON)
+    message_metadata = Column(JSON)  # Cambiado de 'metadata' a 'message_metadata'
+
 
 class ScheduledEvent(Base):
     """Modelo para eventos programados"""
+
     __tablename__ = 'scheduled_events'
-    
+
     id = Column(Integer, primary_key=True)
     user_id = Column(String(255), nullable=False)
     event_id = Column(String(255))  # Google Calendar event ID
@@ -49,10 +55,12 @@ class ScheduledEvent(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
+
 class UserPreferences(Base):
     """Modelo para preferencias de usuario"""
+
     __tablename__ = 'user_preferences'
-    
+
     id = Column(Integer, primary_key=True)
     user_id = Column(String(255), nullable=False, unique=True)
     preferred_channels = Column(JSON)
@@ -63,10 +71,12 @@ class UserPreferences(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     preferences = Column(JSON)
 
+
 class AgentLog(Base):
     """Modelo para logs de agentes"""
+
     __tablename__ = 'agent_logs'
-    
+
     id = Column(Integer, primary_key=True)
     agent_name = Column(String(100), nullable=False)
     task_name = Column(String(100), nullable=False)
@@ -78,9 +88,3 @@ class AgentLog(Base):
     status = Column(String(50), nullable=False)  # 'success', 'error', 'pending'
     error_message = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-
-
-
-
-

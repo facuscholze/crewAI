@@ -226,29 +226,46 @@ class InstagramGetUnreadConversationsTool(BaseTool):
 						messages = messages_result.get('data', [])
                         
 						if messages:
-							last_message = messages[0]
-							last_message_from = last_message.get('from', {}).get('id')
-							last_message_from_str = str(last_message_from) if last_message_from else None
-                            
-							print(f"   - Conversación {conv_id[:30]}...")
-							print(f"     Último mensaje de: {last_message_from_str}")
-							print(f"     Bot ID: {current_user_id_str}")
-                            
-                # LÓGICA SIMPLE: Si el último mensaje NO es del bot → No leída
-							if last_message_from_str and last_message_from_str != current_user_id_str:
-								# El último mensaje es de otro usuario → No leída
-								print(f"     ✅ No leída: último mensaje de otro usuario")
-								unread_conversations.append({
-									**conv,
-									'last_message_from': last_message_from_str,
-									'last_message_time': last_message.get('created_time', 'unknown'),
-									'last_message_text': last_message.get('message', '')[:50],
-									'user_id': last_message_from_str,  # Agregar user_id
-									'message': last_message.get('message', ''),  # Mensaje completo sin truncar
-									'message_type': 'text'  # Por defecto es mensaje de texto
-								})
-							else:
-								print(f"     ❌ Leída: último mensaje del bot")
+								last_message = messages[0]
+								# Si el último mensaje está vacío (p.ej. media o texto ausente), intentar buscar
+								# en los últimos mensajes del thread un mensaje de texto no vacío.
+								if not last_message.get('message'):
+									try:
+										# Buscar en los últimos 10 mensajes para encontrar el más reciente con texto
+										fallback_params = messages_params.copy()
+										fallback_params['limit'] = 10
+										fallback_resp = get_request(messages_url, params=fallback_params)
+										if fallback_resp.status_code == 200:
+											fallback_list = fallback_resp.json().get('data', [])
+											for m in fallback_list:
+												if m.get('message'):
+													last_message = m
+													break
+									except Exception:
+										pass
+
+								last_message_from = last_message.get('from', {}).get('id')
+								last_message_from_str = str(last_message_from) if last_message_from else None
+
+								print(f"   - Conversación {conv_id[:30]}...")
+								print(f"     Último mensaje de: {last_message_from_str}")
+								print(f"     Bot ID: {current_user_id_str}")
+
+					# LÓGICA SIMPLE: Si el último mensaje NO es del bot → No leída
+								if last_message_from_str and last_message_from_str != current_user_id_str:
+									# El último mensaje es de otro usuario → No leída
+									print(f"     ✅ No leída: último mensaje de otro usuario")
+									unread_conversations.append({
+										**conv,
+										'last_message_from': last_message_from_str,
+										'last_message_time': last_message.get('created_time', 'unknown'),
+										'last_message_text': last_message.get('message', '')[:50],
+										'user_id': last_message_from_str,  # Agregar user_id
+										'message': last_message.get('message', ''),  # Mensaje completo sin truncar
+										'message_type': 'text'  # Por defecto es mensaje de texto
+									})
+								else:
+									print(f"     ❌ Leída: último mensaje del bot")
 				except Exception as e:
 					print(f"     ⚠️ Error procesando conversación: {str(e)}")
 					# Si falla, saltar esta conversación

@@ -1,5 +1,5 @@
 from flask import Flask, request, json
-import pprint # Para imprimir bonito en la consola
+import pprint  # Para imprimir bonito en la consola
 
 app = Flask(__name__)
 
@@ -8,7 +8,8 @@ app = Flask(__name__)
 VERIFY_TOKEN = "43833793"
 # -------------------------
 
-@app.route('/webhook', methods=['GET', 'POST'])
+
+@app.route('/webhook', methods=['GET', 'POST'])  # type: ignore
 def webhook():
     if request.method == 'GET':
         # --- Verificación del Webhook de Meta (Paso GET) ---
@@ -25,15 +26,15 @@ def webhook():
     elif request.method == 'POST':
         # --- Recepción de Mensajes (Paso POST) ---
         print("\n--- ¡NUEVO MENSAJE RECIBIDO (POST)! ---")
-        
+
         data = request.json
-        pprint.pprint(data) # Imprime todo el JSON
-        
+        pprint.pprint(data)  # Imprime todo el JSON
+
         try:
             # Extrae el ID del remitente (el IGSID que buscas)
             sender_id = data['entry'][0]['messaging'][0]['sender']['id']
             message_text = data['entry'][0]['messaging'][0]['message']['text']
-            
+
             print(f"\n>>> ID del Remitente (IGSID): {sender_id}")
             print(f">>> Mensaje: {message_text}")
         except Exception:
@@ -41,6 +42,7 @@ def webhook():
 
         print("----------------------------------\n")
         return "OK", 200
+
 
 if __name__ == '__main__':
     # El script corre en el puerto 8080
