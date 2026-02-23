@@ -2,6 +2,7 @@
 
 import os
 import sys
+import logging
 import warnings
 import threading
 from queue import Queue
@@ -16,6 +17,8 @@ from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 # ==================== ENV ====================
 env_path = Path(__file__).parent.parent.parent / ".env"
@@ -42,7 +45,7 @@ processing_messages: set[str] = set()
 
 
 def crew_worker():
-    print("🧵 Worker CrewAI iniciado")
+    logger.info("Worker CrewAI iniciado")
     while True:
         item = message_queue.get()
         if item is None:
@@ -57,7 +60,7 @@ def crew_worker():
                 message_type=item.get("message_type", "text"),
             )
         except Exception as e:
-            print(f"❌ Error procesando {key}: {e}")
+            logger.error(f"Error procesando {key}: {e}")
         finally:
             processing_messages.discard(key)
             message_queue.task_done()

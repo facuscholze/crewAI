@@ -2,6 +2,7 @@
 Herramienta de contexto de conversación mejorada con base de datos
 """
 
+import logging
 from crewai.tools import BaseTool
 from typing import Type, Optional, Dict, List
 from pydantic import BaseModel, Field
@@ -10,7 +11,10 @@ import os
 from datetime import datetime
 
 from ..database.mongodb_conversation import mongodb_conversation_db
+from ..database.conversation_db import conversation_db
 from .runtime_context import current_user_id, current_channel
+
+logger = logging.getLogger(__name__)
 
 class ConversationContextInput(BaseModel):
     """Input schema for conversation context management."""
@@ -56,6 +60,8 @@ class ConversationContextTool(BaseTool):
         except Exception as e:
             return f"Error managing conversation context: {str(e)}"
 
+    # TODO: unused? _format_conversation_context is not called by any tool or external code.
+    # It may be useful for future formatting overrides - kept for reference.
     def _format_conversation_context(self, user_id: str, channel: str, 
                                    history: List[Dict], context_data: Dict) -> str:
         """Formatear contexto de conversación para el agente"""

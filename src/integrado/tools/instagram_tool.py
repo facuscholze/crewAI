@@ -1,3 +1,4 @@
+import logging
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 from typing import Type, Optional, List, Any
@@ -5,6 +6,8 @@ import os
 import time
 import requests  # Necesario para las excepciones
 from .api_client import get_request, post_request
+
+logger = logging.getLogger(__name__)
 
 
 class InstagramMessageInput(BaseModel):
@@ -24,10 +27,7 @@ class InstagramTool(BaseTool):
 		dry_run_val = os.getenv('INSTAGRAM_DRY_RUN', os.getenv('DRY_RUN', 'true')).lower()
 		dry_run = dry_run_val in ('1', 'true', 'yes')
 		if dry_run:
-			print("\n📝 [MODO DRY-RUN ACTIVO]")
-			print(f"👤 Destinatario: {to}")
-			print(f"💬 Mensaje: {message[:200]}")
-			print("✅ Simulación completada")
+			logger.info(f"[DRY-RUN] Mensaje simulado a {to}: {message[:200]}")
 			return f"[DRY-RUN] Mensaje simulado a {to}"
 		if not access_token:
 			return "Error: INSTAGRAM_ACCESS_TOKEN/ FACEBOOK_ACCESS_TOKEN no configurado"
@@ -45,28 +45,24 @@ class InstagramTool(BaseTool):
 		}
 
 		try:
-			print(f"\n📤 Enviando mensaje a Instagram...")
-			print(f"🔗 URL: {url}")
-			print(f"👤 Destinatario ID: {to}")
-			print(f"💬 Mensaje: {message[:100]}...")
+			logger.debug(f"Enviando mensaje a Instagram. URL: {url}, Destinatario: {to}")
 
 			resp = post_request(url, json=payload, headers=headers)
-			print(f"📊 Status Code: {resp.status_code}")
+			logger.debug(f"Status Code: {resp.status_code}")
 
 			if resp.status_code == 200:
-				print("✅ Mensaje enviado exitosamente")
+				logger.info(f"Mensaje enviado exitosamente a {to}")
 				return f"Mensaje enviado a {to}"
 			else:
 				error_text = resp.text[:500] if resp.text else "Sin detalles"
-				print(f"❌ Error: {resp.status_code}")
-				print(f"📄 Response: {error_text}")
+				logger.error(f"Error {resp.status_code} enviando mensaje a {to}: {error_text}")
 				return f"Error enviando mensaje: {resp.status_code} - {error_text}"
 		except requests.RequestException as e:
-			print(f"❌ Error de conexión: {str(e)}")
+			logger.error(f"Error de conexión al enviar mensaje a {to}: {str(e)}")
 			return f"Error de conexión al enviar mensaje: {e}"
 		except Exception as e:
 			error_text = str(e)
-			print(f"❌ Error al enviar mensaje: {error_text}")
+			logger.error(f"Error al enviar mensaje a {to}: {error_text}")
 			return f"Error al enviar mensaje: {error_text}"
 
 
@@ -157,7 +153,7 @@ class InstagramGetUnreadConversationsTool(BaseTool):
 		"""Obtener solo conversaciones no leídas usando la misma lógica que test_instagram.py"""
 		access_token = os.getenv('INSTAGRAM_ACCESS_TOKEN', os.getenv('FACEBOOK_ACCESS_TOKEN'))
 		if not access_token:
-			print("❌ Error: Token de acceso de Instagram no configurado")
+			logger.error("Error: Token de acceso de Instagram no configurado")
 			return []
 
 		url = "https://graph.facebook.com/v24.0/me/conversations"
@@ -165,7 +161,7 @@ class InstagramGetUnreadConversationsTool(BaseTool):
 		# Obtener el ID del bot
 		current_user_id = self._get_current_user_id()
 		if not current_user_id:
-			print("❌ Error: No se pudo obtener el ID del bot")
+			logger.error("Error: No se pudo obtener el ID del bot")
 			return []
 		current_user_id_str = str(current_user_id)
         
@@ -177,28 +173,24 @@ class InstagramGetUnreadConversationsTool(BaseTool):
 			'fields': 'id,updated_time'
 		}
         
-		print(f"\n📤 Obteniendo conversaciones NO LEÍDAS de Instagram...")
-		print(f"🔗 URL: {url}")
-		print(f"📋 Estrategia: Último mensaje del bot = Leída | Último mensaje de otro = No leída")
-		print(f"🔑 Bot ID: {current_user_id_str}")
+		logger.debug(f"Obteniendo conversaciones no leídas de Instagram. URL: {url}, Bot ID: {current_user_id_str}")
         
 		try:
 			response = get_request(url, params=params)
-			print(f"📊 Status Code: {response.status_code}")
+			logger.debug(f"Status Code: {response.status_code}")
             
 			if response.status_code != 200:
 				error_text = response.text[:500] if response.text else "Sin detalles"
-				print(f"❌ Error: {response.status_code}")
-				print(f"📄 Response: {error_text}")
+				logger.error(f"Error {response.status_code}: {error_text}")
 				return []
             
 			result = response.json()
 			all_conversations = result.get('data', [])
             
-			print(f"📊 Total de conversaciones obtenidas: {len(all_conversations)}")
+			logger.debug(f"Total de conversaciones obtenidas: {len(all_conversations)}")
             
 			if not all_conversations:
-				print("✅ No hay conversaciones")
+				logger.debug("No hay conversaciones")
 				return []
             
 			# Ordenar por updated_time descendente (más recientes primero)
@@ -207,7 +199,7 @@ class InstagramGetUnreadConversationsTool(BaseTool):
 			# Verificar cada conversación: ¿el último mensaje es del bot?
 			unread_conversations = []
             
-			print(f"\n🔍 Verificando cada conversación...")
+			logger.debug("Verificando cada conversación...")
 			for conv in all_conversations:
 				conv_id = conv.get('id', 'unknown')
                 
@@ -247,14 +239,12 @@ class InstagramGetUnreadConversationsTool(BaseTool):
 								last_message_from = last_message.get('from', {}).get('id')
 								last_message_from_str = str(last_message_from) if last_message_from else None
 
-								print(f"   - Conversación {conv_id[:30]}...")
-								print(f"     Último mensaje de: {last_message_from_str}")
-								print(f"     Bot ID: {current_user_id_str}")
+								logger.debug(f"Conversación {conv_id[:30]} - Último mensaje de: {last_message_from_str} | Bot ID: {current_user_id_str}")
 
 					# LÓGICA SIMPLE: Si el último mensaje NO es del bot → No leída
 								if last_message_from_str and last_message_from_str != current_user_id_str:
 									# El último mensaje es de otro usuario → No leída
-									print(f"     ✅ No leída: último mensaje de otro usuario")
+									logger.debug(f"No leída: último mensaje de otro usuario ({last_message_from_str})")
 									unread_conversations.append({
 										**conv,
 										'last_message_from': last_message_from_str,
@@ -265,16 +255,16 @@ class InstagramGetUnreadConversationsTool(BaseTool):
 										'message_type': 'text'  # Por defecto es mensaje de texto
 									})
 								else:
-									print(f"     ❌ Leída: último mensaje del bot")
+									logger.debug("Leída: último mensaje del bot")
 				except Exception as e:
-					print(f"     ⚠️ Error procesando conversación: {str(e)}")
+					logger.warning(f"Error procesando conversación: {str(e)}")
 					# Si falla, saltar esta conversación
 					continue
             
-			print(f"\n📊 Conversaciones con último mensaje del otro usuario: {len(unread_conversations)}")
+			logger.debug(f"Conversaciones con último mensaje del otro usuario: {len(unread_conversations)}")
             
 			if unread_conversations:
-				print(f"✅ Encontradas {len(unread_conversations)} conversación(es) no leída(s):")
+				logger.info(f"Encontradas {len(unread_conversations)} conversación(es) no leída(s)")
                 
 				# Mostrar información de las conversaciones no leídas
 				for i, conv in enumerate(unread_conversations[:10], 1):  # Máximo 10
@@ -302,23 +292,18 @@ class InstagramGetUnreadConversationsTool(BaseTool):
 					except:
 						pass
                     
-					print(f"   {i}. ID: {conv_id[:50]}...")
-					print(f"      Último mensaje de: {last_message_from}")
-					print(f"      Hora: {last_message_time}")
-					print(f"      Texto: {last_message_text}")
-					print(f"      Actualizado: {updated_time}")
-					print(f"      Participantes: {participants_str}")
+					logger.debug(f"Conv {i}: ID={conv_id[:50]}, de={last_message_from}, texto={last_message_text}")
                 
 				return unread_conversations
 			else:
-				print("✅ No hay conversaciones no leídas (todos los últimos mensajes fueron del bot)")
+				logger.debug("No hay conversaciones no leídas (todos los últimos mensajes fueron del bot)")
 				return []
                 
 		except requests.exceptions.RequestException as e:
-			print(f"❌ Error de conexión: {str(e)}")
+			logger.error(f"Error de conexión: {str(e)}")
 			return []
 		except Exception as e:
-			print(f"❌ Error inesperado: {str(e)}")
+			logger.error(f"Error inesperado: {str(e)}")
 			return []
 
 

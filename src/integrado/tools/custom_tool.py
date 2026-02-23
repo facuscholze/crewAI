@@ -1,3 +1,5 @@
+# TODO: unused? This is a CrewAI scaffold placeholder. MyCustomTool is never imported or used.
+# Replace with a real tool implementation or delete once a concrete tool is built here.
 from crewai.tools import BaseTool
 from typing import Type
 from pydantic import BaseModel, Field
