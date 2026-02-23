@@ -98,8 +98,8 @@ def obtener_o_crear_conversacion_con_usuario(sender_id: str) -> tuple[bool, dict
             'message_count': len(history),
         }
 
-        print(
-            f"{'🆕' if es_primera else '🔄'} Usuario {sender_id} - {'Primera' if es_primera else 'Conversación existente'} interacción (Total mensajes: {len(history)})"
+        logger.info(
+            f"Usuario {sender_id} - {'Primera' if es_primera else 'Conversación existente'} interacción (Total mensajes: {len(history)})"
         )
 
         return es_primera, conversation_data
@@ -125,7 +125,7 @@ def guardar_mensaje_de_usuario(
             metadata=message_metadata or {},
             channel="messenger",
         )
-        print(f"💾 Mensaje del usuario {sender_id} guardado en BD")
+        logger.info(f"Mensaje del usuario {sender_id} guardado en BD")
         return True
     except Exception as e:
         logger.error(
@@ -145,7 +145,7 @@ def guardar_mensaje_de_agente(sender_id: str, response: str, metadata: dict = No
             metadata=metadata or {},
             channel="messenger",
         )
-        print(f"💾 Respuesta del bot para {sender_id} guardada en BD")
+        logger.info(f"Respuesta del bot para {sender_id} guardada en BD")
         return True
     except Exception as e:
         logger.error(
@@ -160,8 +160,8 @@ def guardar_contexto_de_usuario(sender_id: str, context_updates: dict) -> bool:
     try:
         for key, value in context_updates.items():
             conversation_db.set_context(sender_id, key, str(value), "messenger")
-        print(
-            f"🔄 Contexto actualizado para usuario {sender_id}: {list(context_updates.keys())}"
+        logger.debug(
+            f"Contexto actualizado para usuario {sender_id}: {list(context_updates.keys())}"
         )
         return True
     except Exception as e:
@@ -178,7 +178,7 @@ async def verificar_webhook_meta(request: Request):
     token = request.query_params.get("hub.verify_token")
 
     if mode == "subscribe" and token == VERIFY_TOKEN:
-        print("Webhook verificado correctamente por Meta.")
+        logger.info("Webhook verificado correctamente por Meta.")
         return int(challenge)  # pyright: ignore[reportArgumentType]
 
     logger.warning("Fallo en verificación del webhook de Messenger.")
@@ -190,30 +190,30 @@ async def messenger_webhook(request: Request):
     """Webhook que Meta invoca cuando llega un mensaje de Messenger."""
 
     body = await request.json()
-    print(f"📥 Mensaje entrante de Messenger: {body}")
+    logger.debug(f"Mensaje entrante de Messenger: {body}")
 
     if body.get("object") != "page":
-        print("🚫 Objeto no es 'page', ignorando mensaje")
+        logger.debug("Objeto no es page, ignorando mensaje")
         return {"status": "ignored"}
 
-    print(f"🔍 Procesando {len(body.get('entry', []))} entradas")
+    logger.debug(f"Procesando {len(body.get('entry', []))} entradas")
 
     for entry_idx, entry in enumerate(body.get("entry", [])):
-        print(f"📝 Procesando entrada {entry_idx + 1}/{len(body.get('entry', []))}")
+        logger.debug(f"Procesando entrada {entry_idx + 1}/{len(body.get('entry', []))}")
 
         for event_idx, event in enumerate(entry.get("messaging", [])):
-            print(
-                f"🎯 Procesando evento {event_idx + 1}/{len(entry.get('messaging', []))}"
+            logger.debug(
+                f"Procesando evento {event_idx + 1}/{len(entry.get('messaging', []))}"
             )
 
             sender_id = event["sender"]["id"]
-            print(f"👤 Sender ID: {sender_id}")
+            logger.debug(f"Sender ID: {sender_id}")
 
             # SI (El usuario envía un mensaje de texto) ENTONCES
             if "message" in event:
                 texto_mensaje = event["message"].get("text", "")
-                print(
-                    f"📥 Procesando mensaje de texto del usuario {sender_id}: {texto_mensaje}"
+                logger.debug(
+                    f"Procesando mensaje de texto del usuario {sender_id}: {texto_mensaje}"
                 )
 
                 # Obtener información de la conversación desde la BD
@@ -230,26 +230,24 @@ async def messenger_webhook(request: Request):
                 guardar_mensaje_de_usuario(sender_id, texto_mensaje, message_metadata)
 
                 try:
-                    print(f"🔧 Creando crew")
+                    logger.debug("Creando crew")
                     # Import dinámico para evitar circular import
                     from ..crew import Integrado
 
                     integrado_crew = Integrado()
                     crew = integrado_crew.crew()
-                    print(f"✅ Crew creado exitosamente")
+                    logger.debug("Crew creado exitosamente")
 
                     # Obtener conocimiento de la clínica vía RAG (igual que Instagram/WhatsApp)
                     clinic_knowledge = ""
                     try:
-                        print(f"📚 Cargando conocimiento de la clínica vía RAG...")
+                        logger.debug("Cargando conocimiento de la clínica vía RAG...")
                         rag = RagRetrieverTool()
                         clinic_knowledge = rag._run(texto_mensaje, top_k=3)
 
                         # Si RAG no pudo devolver piezas relevantes, intentar carga directa de archivo (fallback)
                         if not clinic_knowledge:
-                            print(
-                                f"⚠️ RAG no retornó resultados, usando fallback a archivos..."
-                            )
+                            logger.debug("RAG no retornó resultados, usando fallback a archivos...")
                             knowledge_dir = os.path.normpath(
                                 os.path.join(
                                     os.path.dirname(__file__),
@@ -275,13 +273,9 @@ async def messenger_webhook(request: Request):
                                 clinic_knowledge[:6000]
                                 + "\n\n[... conocimiento truncado ...]"
                             )
-                        print(
-                            f"✅ Conocimiento cargado: {len(clinic_knowledge)} caracteres"
-                        )
+                        logger.debug(f"Conocimiento cargado: {len(clinic_knowledge)} caracteres")
                     except Exception as kb_error:
-                        print(
-                            f"⚠️ Error cargando clinic knowledge via RAG: {str(kb_error)}"
-                        )
+                        logger.warning(f"Error cargando clinic knowledge via RAG: {str(kb_error)}")
                         clinic_knowledge = ""
 
                     # Preparar inputs con contexto de la conversación Y conocimiento de la clínica
@@ -298,11 +292,11 @@ async def messenger_webhook(request: Request):
                         "clinic_knowledge": clinic_knowledge,  # 🆕 Agregar conocimiento de la clínica
                     }
 
-                    print(
-                        f"🚀 Ejecutando crew con inputs: channel=messenger, message='{texto_mensaje}', first_interaction={es_primera_interaccion}, kb_size={len(clinic_knowledge)}"
+                    logger.debug(
+                        f"Ejecutando crew: channel=messenger, message='{texto_mensaje}', first_interaction={es_primera_interaccion}, kb_size={len(clinic_knowledge)}"
                     )
                     resultado = crew.kickoff(inputs=crew_inputs)
-                    print(f"✅ Crew ejecutado exitosamente")
+                    logger.debug("Crew ejecutado exitosamente")
 
                 except Exception as e:
                     logger.error(
@@ -321,7 +315,7 @@ async def messenger_webhook(request: Request):
                     )
                     continue
 
-                print(f"🔄 Procesando respuesta del crew")
+                logger.debug("Procesando respuesta del crew")
 
                 # Extraer respuesta del crew usando el atributo correcto
                 respuesta_agente = (
@@ -330,7 +324,7 @@ async def messenger_webhook(request: Request):
                     or getattr(resultado, "final_output", None)
                     or "Lo siento, no entendí tu mensaje. ¿Podrías repetirlo?"
                 )
-                print(f"📤 Respuesta generada: {respuesta_agente}")
+                logger.debug(f"Respuesta generada: {respuesta_agente}")
 
                 # Guardar respuesta del bot en la BD
                 response_metadata = {
@@ -357,14 +351,12 @@ async def messenger_webhook(request: Request):
                 guardar_contexto_de_usuario(sender_id, context_updates)
 
                 messenger_tool._run(recipient_id=sender_id, message=respuesta_agente)
-                print(f"✅ Mensaje enviado exitosamente a usuario {sender_id}")
+                logger.info(f"Mensaje enviado exitosamente a usuario {sender_id}")
 
             # SI (El usuario hace click en botón (postback)) ENTONCES
             if "postback" in event:
                 payload = event["postback"].get("payload", "")
-                print(
-                    f"🔘 Postback recibido del usuario {sender_id} con payload: {payload}"
-                )
+                logger.debug(f"Postback recibido del usuario {sender_id} con payload: {payload}")
 
                 # Guardar el postback como mensaje del usuario
                 postback_metadata = {
@@ -393,9 +385,9 @@ async def messenger_webhook(request: Request):
                     {'type': 'postback_response', 'original_payload': payload},
                 )
 
-                print(f"✅ Respuesta a postback enviada a usuario {sender_id}")
+                logger.info(f"Respuesta a postback enviada a usuario {sender_id}")
 
-        print(f"✅ Procesamiento completado exitosamente")
+        logger.info("Procesamiento completado exitosamente")
         return {"status": "ok"}
 
 
@@ -425,7 +417,7 @@ def marcar_usuario_como_conocido(sender_id: str):
             'customer_status': 'known',
         }
         guardar_contexto_de_usuario(sender_id, context_updates)
-        print(f"Usuario {sender_id} marcado como conocido en BD")
+        logger.info(f"Usuario {sender_id} marcado como conocido en BD")
     except Exception as e:
         logger.error(
             f"❌ Error al marcar usuario {sender_id} como conocido: {str(e)}",

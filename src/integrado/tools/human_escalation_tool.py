@@ -1,6 +1,7 @@
 """
 Herramienta para escalamiento humano en conversaciones (Omnicanal Segura)
 """
+import logging
 from crewai.tools import BaseTool
 from typing import Type, Optional, List, Dict
 from pydantic import BaseModel, Field
@@ -10,6 +11,8 @@ from datetime import datetime
 from openai import OpenAI
 from .whatsapp_tool import WhatsAppTool
 from .runtime_context import current_user_id, current_channel
+
+logger = logging.getLogger(__name__)
 
 # Cache simple para evitar escalamientos duplicados (últimos 5 minutos)
 _escalation_cache = {}
@@ -36,7 +39,7 @@ class HumanEscalationTool(BaseTool):
         safe_user_id = current_user_id() or user_id
         channel = current_channel() or "whatsapp"
         
-        print(f"🚨 PROCESANDO ESCALAMIENTO - Canal: {channel} | User: {safe_user_id}")
+        logger.info(f"Procesando escalamiento - Canal: {channel} | User: {safe_user_id}")
 
         # 2. Variables iniciales
         recent_messages = []
@@ -118,9 +121,9 @@ class HumanEscalationTool(BaseTool):
                             break
 
         except ImportError:
-            print("⚠️ No se pudo importar la DB (ImportError). Usando solo mensaje actual.")
+            logger.warning("No se pudo importar la DB (ImportError). Usando solo mensaje actual.")
         except Exception as e:
-            print(f"⚠️ Error obteniendo contexto reciente: {e}")
+            logger.warning(f"Error obteniendo contexto reciente: {e}")
 
         # 4. Buscar teléfono en el mensaje ACTUAL (Prioridad)
         current_msg_phone = extract_phone(user_message)
@@ -134,15 +137,15 @@ class HumanEscalationTool(BaseTool):
                 conversation_meta = mongodb_conversation_db.get_conversation_metadata(safe_user_id)
                 if conversation_meta and conversation_meta.get('metadata', {}).get('telefono'):
                     user_info['telefono'] = conversation_meta['metadata']['telefono']
-                    print(f"📞 Teléfono recuperado de metadata: {user_info['telefono']}")
+                    logger.info(f"Teléfono recuperado de metadata: {user_info['telefono']}")
             except Exception as e:
-                print(f"⚠️ No se pudieron obtener metadatos: {e}")
+                logger.warning(f"No se pudieron obtener metadatos: {e}")
 
         # ==============================================================================
         # 6. BLOQUEO DE SEGURIDAD (LA LÓGICA DE INSTAGRAM QUE PEDISTE)
         # ==============================================================================
         if channel != "whatsapp" and not user_info.get('telefono'):
-            print(f"🛑 BLOQUEO: Canal {channel} sin teléfono. Solicitando al agente que pregunte.")
+            logger.info(f"Bloqueo: Canal {channel} sin teléfono. Solicitando al agente que pregunte.")
             return (
                 f"⚠️ NO SE PUEDE ESCALAR AÚN. Estás hablando por {channel.upper()} y no tenemos un número de contacto.\n"
                 "👉 ACCIÓN REQUERIDA: Responde al cliente amablemente pidiéndole su número de WhatsApp "
@@ -155,7 +158,7 @@ class HumanEscalationTool(BaseTool):
         if safe_user_id in _escalation_cache:
             last = _escalation_cache[safe_user_id]
             if (now - last).total_seconds() < 45:
-                print(f"⚠️ Escalamiento reciente para {safe_user_id}, evitando duplicado")
+                logger.info(f"Escalamiento reciente para {safe_user_id}, evitando duplicado")
                 return f"✅ Ya se escaló recientemente. Sigue hablando con el cliente."
         
        
@@ -199,12 +202,12 @@ class HumanEscalationTool(BaseTool):
                 if clinic_number.startswith('54') and len(clinic_number) >= 10:
                     formatted_clinic = f"+{clinic_number[:2]} {clinic_number[2:5]} {clinic_number[5:]}"
                 
-                print(f"✅ ESCALAMIENTO EXITOSO a {clinic_number}")
+                logger.info(f"Escalamiento exitoso a {clinic_number}")
                 return f"✅ Escalamiento exitoso. Te van a contactar al número que nos diste desde el {formatted_clinic}."
             else:
                 return f"⚠️ Problema enviando notificación: {result}. Sigue atendiendo."
         except Exception as e:
-            print(f"❌ ERROR EN ESCALAMIENTO: {str(e)}")
+            logger.error(f"Error en escalamiento: {str(e)}")
             return f"⚠️ Error técnico al notificar ({str(e)}). Sigue atendiendo."
 
     def _generate_escalation_summary(self, recent_messages: List, user_message: str, user_info: Dict, recent_context_lines: List) -> str:
@@ -244,7 +247,7 @@ class HumanEscalationTool(BaseTool):
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
-            print(f"Error LLM: {e}")
+            logger.error(f"Error LLM al generar resumen de escalamiento: {e}")
             return f"El cliente solicita atención humana. Mensaje: '{user_message}'"
 
 class CheckEscalationStatusInput(BaseModel):

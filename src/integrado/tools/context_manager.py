@@ -1,3 +1,7 @@
+# TODO: unused? This entire module (context_manager.py) is NOT imported anywhere in the project.
+# The active conversation-context tools live in conversation_context_tool.py (backed by MongoDB/SQLite).
+# This file uses Redis and has a different internal implementation. Keep for reference but do not enable
+# without verifying Redis connectivity and removing the conflict with conversation_context_tool.py.
 from crewai.tools import BaseTool
 from typing import Type, Optional, Dict, List
 from pydantic import BaseModel, Field

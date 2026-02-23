@@ -4,8 +4,11 @@ from crewai.agents.agent_builder.base_agent import BaseAgent
 from typing import List
 import os
 import signal
+import logging
 from datetime import datetime
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 # Parche para compatibilidad con Windows - Añadir SIGHUP si no existe
 if not hasattr(signal, 'SIGHUP'):
@@ -150,8 +153,6 @@ class Integrado(object):
                 ConversationHistoryTool(),
                 AIResponseTool(),
                 RagRetrieverTool(),
-                HumanEscalationTool(),
-                CheckEscalationStatusTool(),
                 HumanEscalationTool(),
                 CheckEscalationStatusTool(),
             ],
@@ -370,8 +371,8 @@ class Integrado(object):
     ):
         """Procesa mensajes entrantes de cualquier canal omnicanal"""
 
-        print(
-            f"🚀 Procesando mensaje omnicanal: {channel} - {user_id} - {message[:50]}..."
+        logger.info(
+            f"Procesando mensaje omnicanal: {channel} - {user_id} - {message[:50]}..."
         )
 
         # Obtener contexto de conversación existente
@@ -416,14 +417,14 @@ class Integrado(object):
                 )
             inputs['clinic_knowledge'] = clinic_knowledge  # type: ignore
         except Exception as e:
-            print(f"⚠️ Error cargando clinic knowledge via RAG: {str(e)}")
+            logger.warning(f"Error cargando clinic knowledge via RAG: {str(e)}")
             # Asegurar que el template tenga la variable aunque esté vacía
             inputs['clinic_knowledge'] = ""
 
-        print(
-            f"📋 Contexto obtenido: {context_result[:200]}..."
+        logger.info(
+            f"Contexto obtenido: {context_result[:200]}..."
             if len(context_result) > 200
-            else f"📋 Contexto: {context_result}"
+            else f"Contexto: {context_result}"
         )
 
         tokens = set_current_session(user_id, channel)
@@ -542,8 +543,8 @@ class Integrado(object):
                 result = crew.kickoff(inputs=inputs)
             except Exception as exc:
                 error_text = str(exc)
-                print(
-                    f"⚠️ Crew execution error (attempt {attempt + 1}/{retries + 1}): {error_text}"
+                logger.warning(
+                    f"Crew execution error (attempt {attempt + 1}/{retries + 1}): {error_text}"
                 )
 
                 # Si es rate limit, esperar un poco más antes de reintentar
@@ -551,13 +552,13 @@ class Integrado(object):
                     import time
 
                     wait_time = 30  # Esperar 30 segundos para rate limits
-                    print(
-                        f"⏳ Rate limit detectado. Esperando {wait_time} segundos antes de reintentar..."
+                    logger.info(
+                        f"Rate limit detectado. Esperando {wait_time} segundos antes de reintentar..."
                     )
                     time.sleep(wait_time)
 
                 if attempt < retries:
-                    print("🔁 Reintentando ejecución del crew...")
+                    logger.info("Reintentando ejecución del crew...")
                     continue
                 # Si falla definitivamente, devolver mensaje amigable pero continuar
                 return f"Lo siento, hubo un problema técnico. Por favor intenta de nuevo en un momento."
@@ -565,9 +566,9 @@ class Integrado(object):
             if isinstance(result, str) and (
                 "execution timed out" in result.lower() or "timed out" in result.lower()
             ):
-                print(f"⚠️ Crew timeout detected (attempt {attempt + 1}/{retries + 1}).")
+                logger.warning(f"Crew timeout detected (attempt {attempt + 1}/{retries + 1}).")
                 if attempt < retries:
-                    print("🔁 Reintentando ejecución del crew tras timeout...")
+                    logger.info("Reintentando ejecución del crew tras timeout...")
                     continue
             return result
 

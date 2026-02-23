@@ -1,8 +1,11 @@
+import logging
 from crewai.tools import BaseTool
 from typing import Type, List, Dict
 from pydantic import BaseModel, Field
 import os
 import glob
+
+logger = logging.getLogger(__name__)
 
 class RagInput(BaseModel):
     query: str = Field(..., description="Query to retrieve relevant knowledge")
@@ -44,11 +47,11 @@ class RagRetrieverTool(BaseTool):
                             for chunk in chunks:
                                 docs.append({'source': os.path.basename(path), 'text': chunk})
                     except Exception as e:
-                        print(f"Error loading {path}: {e}")
+                        logger.warning(f"Error loading {path}: {e}")
                         continue
         
         self._docs = docs
-        print(f"📚 RAG Knowledge loaded: {len(self._docs)} chunks available.")
+        logger.info(f"RAG Knowledge loaded: {len(self._docs)} chunks available.")
 
     def _score(self, query: str, doc_text: str) -> float:
         # Sistema simple de puntuación por superposición de tokens
